@@ -1878,9 +1878,10 @@ static void jm_trace_text_span(
         if (!(fflags & TEXT_FONT_MONOSPACED))
         {
             fz_font* out_font = nullptr;
+            int gid = mupdf::ll_fz_encode_character_with_fallback(span->font, 32, 0, 0, &out_font);
             space_adv = mupdf::ll_fz_advance_glyph(
-                    span->font,
-                    mupdf::ll_fz_encode_character_with_fallback(span->font, 32, 0, 0, &out_font),
+                    out_font,
+                    gid,
                     span->wmode
                     );
             space_adv *= fsize;
