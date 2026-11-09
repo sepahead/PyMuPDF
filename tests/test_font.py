@@ -384,3 +384,57 @@ def test_5049():
     path_out = os.path.normpath(f'{__file__}/../../tests/test_5049_out.pdf')
     exam.save(path_out, garbage=4, deflate=True, clean=True)
     exam.close()
+
+
+def test_texttrace_spacewidth_fallback():
+    '''
+    A span font without a space glyph gets the space glyph from a fallback
+    font. Page.get_texttrace() must measure that glyph in the fallback font.
+
+    The font below has only the glyphs .notdef, A and B. Measuring the
+    fallback glyph index in this font made MuPDF warn
+    `FT_Get_Advance(...): invalid glyph index`, and the space width fell back
+    to the advance of the last character.
+    '''
+    import io
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+
+    names = ['.notdef', 'A', 'B']
+    builder = FontBuilder(1000, isTTF=True)
+    builder.setupGlyphOrder(names)
+    builder.setupCharacterMap({ord('A'): 'A', ord('B'): 'B'})
+    glyphs = dict()
+    for name in names:
+        pen = TTGlyphPen(None)
+        if name != '.notdef':
+            pen.moveTo((100, 0))
+            pen.lineTo((500, 0))
+            pen.lineTo((500, 700))
+            pen.closePath()
+        glyphs[name] = pen.glyph()
+    builder.setupGlyf(glyphs)
+    builder.setupHorizontalMetrics({name: (1000, 0) for name in names})
+    builder.setupHorizontalHeader(ascent=800, descent=-200)
+    builder.setupNameTable({'familyName': 'NoSpace', 'styleName': 'Regular'})
+    builder.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
+    builder.setupPost()
+    out = io.BytesIO()
+    builder.save(out)
+    fontbuffer = out.getvalue()
+    font = pymupdf.Font(fontbuffer=fontbuffer)
+    assert not font.has_glyph(ord(' '))
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_font(fontname='F0', fontbuffer=fontbuffer)
+    page.insert_text((50, 100), 'ABBA', fontname='F0', fontsize=20)
+    spans = page.get_texttrace()
+    wt = pymupdf.TOOLS.mupdf_warnings()
+    assert not wt, f'{wt=}'
+    assert len(spans) == 1
+    # Font.glyph_advance() measures the fallback glyph in the fallback font.
+    expected = font.glyph_advance(ord(' ')) * 20
+    spacewidth = spans[0]['spacewidth']
+    print(f'{spacewidth=} {expected=}')
+    assert abs(spacewidth - expected) < 1e-3

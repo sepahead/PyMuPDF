@@ -23820,7 +23820,7 @@ def jm_trace_text_span(dev, span, type_, ctm, colorspace, color, alpha, seqno):
         if not (fflags & TEXT_FONT_MONOSPACED):
             c, out_font = mupdf.fz_encode_character_with_fallback( span.font(), 32, 0, 0)
             space_adv = mupdf.fz_advance_glyph(
-                    span.font(),
+                    out_font,
                     c,
                     span.m_internal.wmode,
                     )
